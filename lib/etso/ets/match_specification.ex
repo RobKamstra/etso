@@ -19,7 +19,11 @@ defmodule Etso.ETS.MatchSpecification do
   end
 
   defp build_conditions(field_names, params, query_wheres) do
-    Enum.reduce(query_wheres, true, fn %Ecto.Query.BooleanExpr{expr: expression, op: op}, acc ->
+    [%{expr: expression} | rest] = query_wheres
+    initial_condition = build_condition(field_names, params, expression)
+
+    Enum.reduce(rest, initial_condition, fn %Ecto.Query.BooleanExpr{expr: expression, op: op},
+                                            acc ->
       case op do
         :and -> {:andalso, acc, build_condition(field_names, params, expression)}
         :or -> {:orelse, acc, build_condition(field_names, params, expression)}
