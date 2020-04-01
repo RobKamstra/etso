@@ -11,24 +11,29 @@ defmodule Etso.ETS.MatchSpecification do
     match_head = build_head(field_names)
     match_conditions = build_conditions(field_names, params, query.wheres)
     match_body = [build_body(field_names, query.select.fields)]
-    {match_head, [match_conditions], match_body}
+    {match_head, match_conditions, match_body}
   end
 
   defp build_head(field_names) do
     List.to_tuple(Enum.map(1..length(field_names), fn x -> :"$#{x}" end))
   end
 
+  defp build_conditions(field_names, params, []) do
+    []
+  end
+
   defp build_conditions(field_names, params, query_wheres) do
     [%{expr: expression} | rest] = query_wheres
     initial_condition = build_condition(field_names, params, expression)
 
-    Enum.reduce(rest, initial_condition, fn %Ecto.Query.BooleanExpr{expr: expression, op: op},
-                                            acc ->
+    rest
+    |> Enum.reduce(initial_condition, fn %Ecto.Query.BooleanExpr{expr: expression, op: op}, acc ->
       case op do
         :and -> {:andalso, acc, build_condition(field_names, params, expression)}
         :or -> {:orelse, acc, build_condition(field_names, params, expression)}
       end
     end)
+    |> List.wrap()
   end
 
   defmacrop guard_operator(:and), do: :andalso
