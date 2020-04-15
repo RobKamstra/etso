@@ -4,13 +4,30 @@ defmodule Etso.ETS.MatchSpecification do
   ETS Match Specifications in order to execute the given queries.
   """
 
+  def build(%{updates: []} = query, params) do
+    {_, schema} = query.from.source
+    field_names = Etso.ETS.TableStructure.field_names(schema)
+
+    match_head = build_head(field_names)
+    match_conditions = build_conditions(field_names, params, query.wheres)
+
+    match_body =
+      if query.select do
+        [build_body(field_names, query.select.fields)]
+      else
+        [true]
+      end
+
+    {match_head, match_conditions, match_body}
+  end
+
   def build(query, params) do
     {_, schema} = query.from.source
     field_names = Etso.ETS.TableStructure.field_names(schema)
 
     match_head = build_head(field_names)
     match_conditions = build_conditions(field_names, params, query.wheres)
-    match_body = [build_body(field_names, query.select.fields)]
+    match_body = [build_update_body(field_names, query.updates, params)]
     {match_head, match_conditions, match_body}
   end
 
@@ -84,6 +101,44 @@ defmodule Etso.ETS.MatchSpecification do
       field_index = get_field_index(field_names, field_name)
       :"$#{field_index}"
     end
+  end
+
+  defp build_update_body(field_names, update_expressions, params) do
+    updates = updates(update_expressions, params)
+
+    match_spec_updates =
+      for field_name <- field_names,
+          field_index = get_field_index(field_names, field_name) do
+        field_index = :"$#{field_index}"
+
+        case Map.get(updates, field_name, nil) do
+          # no update
+          nil -> field_index
+          {:inc, data} -> {:+, field_index, data}
+          {:set, data} -> data
+        end
+      end
+
+    {List.to_tuple(match_spec_updates)}
+  end
+
+  defp updates(update_expressions, params) do
+    for query_expression <- update_expressions,
+        update_expression = query_expression.expr,
+        {update_type, update} <- update_expression,
+        {update_field_name, field_update_expression} <- update,
+        into: %{} do
+      update_value = update(field_update_expression, params)
+      {update_field_name, {update_type, update_value}}
+    end
+  end
+
+  defp update({:^, [], [index]}, params) do
+    Enum.at(params, index)
+  end
+
+  defp update(value, _params) do
+    value
   end
 
   defp resolve_field_name(field) do

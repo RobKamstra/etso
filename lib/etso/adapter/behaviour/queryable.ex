@@ -4,11 +4,11 @@ defmodule Etso.Adapter.Behaviour.Queryable do
   alias Etso.Adapter.TableRegistry
   alias Etso.ETS.MatchSpecification
 
-  def prepare(:all, query) do
-    {:nocache, query}
+  def prepare(type, query) do
+    {:nocache, {type, query}}
   end
 
-  def execute(%{repo: repo}, _, {:nocache, query}, params, _) do
+  def execute(%{repo: repo}, _, {:nocache, {:all, query}}, params, _) do
     {_, schema} = query.from.source
     {:ok, ets_table} = TableRegistry.get_table(repo, schema)
     ets_match = MatchSpecification.build(query, params)
@@ -16,7 +16,23 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     {length(ets_objects), ets_objects}
   end
 
-  def stream(%{repo: repo}, _, {:nocache, query}, params, options) do
+  def execute(%{repo: repo}, _, {:nocache, {:delete_all, query}}, params, _) do
+    {_, schema} = query.from.source
+    {:ok, ets_table} = TableRegistry.get_table(repo, schema)
+    ets_match = MatchSpecification.build(query, params)
+    count = :ets.select_delete(ets_table, [ets_match])
+    {count, nil}
+  end
+
+  def execute(%{repo: repo}, _, {:nocache, {:update_all, query}}, params, _) do
+    {_, schema} = query.from.source
+    {:ok, ets_table} = TableRegistry.get_table(repo, schema)
+    ets_match = MatchSpecification.build(query, params)
+    count = :ets.select_replace(ets_table, [ets_match])
+    {count, nil}
+  end
+
+  def stream(%{repo: repo}, _, {:nocache, {_, query}}, params, options) do
     {_, schema} = query.from.source
     {:ok, ets_table} = TableRegistry.get_table(repo, schema)
     ets_match = MatchSpecification.build(query, params)
