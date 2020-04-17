@@ -104,7 +104,7 @@ defmodule Etso.ETS.MatchSpecification do
   end
 
   defp build_update_body(field_names, update_expressions, params) do
-    updates = updates(update_expressions, params)
+    updates = updates(update_expressions, params, field_names)
 
     match_spec_updates =
       for field_name <- field_names,
@@ -122,22 +122,40 @@ defmodule Etso.ETS.MatchSpecification do
     {List.to_tuple(match_spec_updates)}
   end
 
-  defp updates(update_expressions, params) do
+  defp updates(update_expressions, params, field_names) do
     for query_expression <- update_expressions,
         update_expression = query_expression.expr,
         {update_type, update} <- update_expression,
         {update_field_name, field_update_expression} <- update,
         into: %{} do
-      update_value = update(field_update_expression, params)
+      update_value = update(field_update_expression, params, field_names)
       {update_field_name, {update_type, update_value}}
     end
   end
 
-  defp update({:^, [], [index]}, params) do
+  defp update({:+, [], [lhs, rhs]}, params, field_names) do
+    {:+, update(lhs, params, field_names), update(rhs, params, field_names)}
+  end
+
+  defp update({:*, [], [lhs, rhs]}, params, field_names) do
+    {:*, update(lhs, params, field_names), update(rhs, params, field_names)}
+  end
+
+  defp update({:-, [], [lhs, rhs]}, params, field_names) do
+    {:-, update(lhs, params, field_names), update(rhs, params, field_names)}
+  end
+
+  defp update({{:., [], [{:&, [], [0]}, field_name]}, [], []}, _params, field_names)
+       when is_atom(field_name) do
+    field_index = get_field_index(field_names, field_name)
+    :"$#{field_index}"
+  end
+
+  defp update({:^, [], [index]}, params, field_names) do
     Enum.at(params, index)
   end
 
-  defp update(value, _params) do
+  defp update(value, _params, _field_names) do
     value
   end
 
