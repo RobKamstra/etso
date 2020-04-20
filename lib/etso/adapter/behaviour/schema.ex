@@ -41,6 +41,11 @@ defmodule Etso.Adapter.Behaviour.Schema do
     {:ok, []}
   end
 
+  def lookup(%{repo: repo}, %{schema: schema}, primary_key) do
+    {:ok, ets_table} = TableRegistry.get_table(repo, schema)
+    :ets.lookup(ets_table, primary_key)
+  end
+
   defp build_ets_updates(schema, fields) do
     ets_field_names = TableStructure.field_names(schema)
 
