@@ -35,7 +35,7 @@ defmodule Etso.ETS.MatchSpecification do
     List.to_tuple(Enum.map(1..length(field_names), fn x -> :"$#{x}" end))
   end
 
-  defp build_conditions(field_names, params, []) do
+  defp build_conditions(_field_names, _params, []) do
     []
   end
 
@@ -151,7 +151,7 @@ defmodule Etso.ETS.MatchSpecification do
     :"$#{field_index}"
   end
 
-  defp update({:^, [], [index]}, params, field_names) do
+  defp update({:^, [], [index]}, params, _field_names) do
     Enum.at(params, index)
   end
 
