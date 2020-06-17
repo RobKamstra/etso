@@ -4,6 +4,36 @@ defmodule Etso.ETS.MatchSpecification do
   ETS Match Specifications in order to execute the given queries.
   """
 
+  def build_select(query, params) do
+    {_, schema} = query.from.source
+    field_names = Etso.ETS.TableStructure.field_names(schema)
+    match_head = build_head(field_names)
+    match_conditions = build_conditions(field_names, params, query.wheres)
+    match_body = [build_body(field_names, query.select.fields)]
+
+    {match_head, match_conditions, match_body}
+  end
+
+  def build_delete(query, params) do
+    {_, schema} = query.from.source
+    field_names = Etso.ETS.TableStructure.field_names(schema)
+    match_head = build_head(field_names)
+    match_conditions = build_conditions(field_names, params, query.wheres)
+    match_body = [true]
+
+    {match_head, match_conditions, match_body}
+  end
+
+  def build_update(query, params) do
+    {_, schema} = query.from.source
+    field_names = Etso.ETS.TableStructure.field_names(schema)
+    match_head = build_head(field_names)
+    match_conditions = build_conditions(field_names, params, query.wheres)
+    match_body = [build_update_body(field_names, query.updates, params)]
+
+    {match_head, match_conditions, match_body}
+  end
+
   def build(%{updates: []} = query, params) do
     {_, schema} = query.from.source
     field_names = Etso.ETS.TableStructure.field_names(schema)
@@ -32,7 +62,25 @@ defmodule Etso.ETS.MatchSpecification do
   end
 
   defp build_head(field_names) do
-    List.to_tuple(Enum.map(1..length(field_names), fn x -> :"$#{x}" end))
+    {field_indexes, _} = Enum.reduce(field_names, {[], 1}, &build_head_selection/2)
+    List.to_tuple(field_indexes)
+  end
+
+  defp build_head_selection(field_name, {field_indexes, index}) when is_atom(field_name) do
+    field_index = [:"$#{index}"]
+    {field_indexes ++ field_index, index + 1}
+  end
+
+  defp build_head_selection(composite_names, {field_indexes, index}) do
+    count = length(composite_names)
+
+    tuple =
+      index..count
+      |> Enum.map(fn x -> :"$#{x}" end)
+      |> List.to_tuple()
+      |> List.wrap()
+
+    {field_indexes ++ tuple, index + count}
   end
 
   defp build_conditions(_field_names, _params, []) do
@@ -177,6 +225,22 @@ defmodule Etso.ETS.MatchSpecification do
   end
 
   defp get_field_index(field_names, field_name) do
-    1 + Enum.find_index(field_names, fn x -> x == field_name end)
+    Enum.reduce_while(field_names, 1, fn
+      x, index when is_atom(x) ->
+        if x == field_name do
+          {:halt, index}
+        else
+          {:cont, index + 1}
+        end
+
+      x, index when is_list(x) ->
+        result = Enum.find_index(x, fn y -> y == field_name end)
+
+        if result do
+          {:halt, index + result}
+        else
+          {:cont, index + Enum.count(x)}
+        end
+    end)
   end
 end

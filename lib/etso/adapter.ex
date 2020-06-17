@@ -25,8 +25,15 @@ defmodule Etso.Adapter do
   @doc false
   def init(config) do
     {:ok, repo} = Keyword.fetch(config, :repo)
-    child_spec = __MODULE__.Supervisor.child_spec(repo)
-    adapter_meta = %__MODULE__.Meta{repo: repo}
+    cache_for = Keyword.get(config, :cache_for, nil)
+    child_spec = __MODULE__.Supervisor.child_spec(config)
+
+    adapter_meta = %__MODULE__.Meta{
+      repo: repo,
+      cache_for: cache_for,
+      entry_repo: Module.concat(repo, Cache)
+    }
+
     {:ok, child_spec, adapter_meta}
   end
 

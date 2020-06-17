@@ -3,5 +3,5 @@ defmodule Etso.Adapter.Meta do
 
   @type t :: %__MODULE__{repo: Ecto.Repo.t()}
   @enforce_keys ~w(repo)a
-  defstruct repo: nil
+  defstruct repo: nil, cache_for: nil, entry_repo: nil
 end

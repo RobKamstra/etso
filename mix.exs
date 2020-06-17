@@ -27,6 +27,8 @@ defmodule Etso.MixProject do
 
   defp deps do
     [
+      {:telemetry, "~> 0.4.0"},
+      {:statistics, "~> 0.6.2"},
       {:ecto, "~> 3.0"},
       {:dialyxir, "~> 1.0.0-rc.6", only: :dev, runtime: false},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
