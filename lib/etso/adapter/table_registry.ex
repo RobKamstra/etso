@@ -9,8 +9,8 @@ defmodule Etso.Adapter.TableRegistry do
   @spec get_table(Etso.repo(), Etso.schema()) :: {:ok, Etso.table()} | {:error, term()}
   @spec register_table(Etso.repo(), Etso.schema(), Etso.table()) :: :ok | {:error, term()}
 
-  alias Etso.Adapter.TableServer
   alias Etso.Adapter.TableSupervisor
+  alias Etso.Adapter.CacheSupervisor
 
   @doc """
   Returns Child Specification for the Table Registry that will be associated with the `repo`.
@@ -62,8 +62,8 @@ defmodule Etso.Adapter.TableRegistry do
 
   defp start_server(repo, schema) do
     name = {:via, Registry, {build_name(repo), schema}}
-    child_spec = {TableServer, {repo, schema, name}}
-    TableSupervisor.start_child(repo, child_spec)
+    child_spec = {TableSupervisor, {repo, schema, name}}
+    CacheSupervisor.start_child(repo, child_spec)
   end
 
   defp build_name(repo) do

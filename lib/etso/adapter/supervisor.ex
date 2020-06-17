@@ -11,16 +11,30 @@ defmodule Etso.Adapter.Supervisor do
   @doc """
   Starts the Supervisor for the given `repo`.
   """
-  def start_link(repo) do
-    Supervisor.start_link(__MODULE__, repo)
+  def start_link(config) do
+    Supervisor.start_link(__MODULE__, config)
   end
 
   @impl Supervisor
-  def init(repo) do
-    children = [
-      {Etso.Adapter.TableSupervisor, repo},
-      {Etso.Adapter.TableRegistry, repo}
-    ]
+  def init(config) do
+    {:ok, repo} = Keyword.fetch(config, :repo)
+    cache_for = Keyword.get(config, :cache_for, nil)
+
+    children =
+      if cache_for do
+        cache = Module.concat([repo, Cache])
+
+        [
+          {cache, [name: cache]},
+          {Etso.Adapter.CacheSupervisor, repo},
+          {Etso.Adapter.TableRegistry, repo}
+        ]
+      else
+        [
+          {Etso.Adapter.CacheSupervisor, repo},
+          {Etso.Adapter.TableRegistry, repo}
+        ]
+      end
 
     Supervisor.init(children, strategy: :one_for_one)
   end

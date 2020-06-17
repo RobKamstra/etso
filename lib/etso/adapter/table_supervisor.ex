@@ -1,27 +1,49 @@
 defmodule Etso.Adapter.TableSupervisor do
-  @moduledoc """
-  Provides convenience function to spin up a Dynamic Supervisor, which is used to hold the Table
-  Servers.
-  """
-
-  @spec child_spec(Etso.repo()) :: Supervisor.child_spec()
-  @spec start_child(Etso.repo(), {module(), term()}) :: DynamicSupervisor.on_start_child()
+  use Supervisor
+  @spec start_link(Etso.repo()) :: Supervisor.on_start()
 
   @doc """
-  Returns Child Specification for the Table Supervisor that will be associated with the `repo`.
+  Starts the Supervisor for the given `repo`.
   """
-  def child_spec(repo) do
-    DynamicSupervisor.child_spec(strategy: :one_for_one, name: build_name(repo))
+  def start_link(config) do
+    Supervisor.start_link(__MODULE__, config)
   end
 
-  @doc """
-  Starts the Child under the Table Supervisor associated with the `repo`.
-  """
-  def start_child(repo, child_spec) do
-    DynamicSupervisor.start_child(build_name(repo), child_spec)
+  @impl Supervisor
+  def init({repo, schema, _} = config) do
+    application_config = Application.get_env(:summa_core, repo)
+
+    children =
+      if application_config do
+        janitors = Keyword.get(application_config, :janitors, %{})
+
+        janitor_config =
+          janitors
+          |> Map.get(schema, default_janitor_configuration())
+          |> Map.put(:schema, schema)
+          |> Map.put(:repo, repo)
+          |> Map.put(:cache_entry_repo, Module.concat(repo, Cache))
+
+        [
+          {Etso.Adapter.TableServer, config},
+          {Etso.Adapter.Janitor, janitor_config}
+        ]
+      else
+        [
+          {Etso.Adapter.TableServer, config}
+        ]
+      end
+
+    Supervisor.init(children, strategy: :one_for_one)
   end
 
-  defp build_name(repo) do
-    Module.concat([repo, Enum.at(Module.split(__MODULE__), -1)])
+  defp default_janitor_configuration() do
+    %{
+      cleaning_interval: 1_000,
+      strategy: Etso.Cache.CleaningStrategy.LeastRecentlyWritten,
+      options: [
+        max_cache_entries: 100
+      ]
+    }
   end
 end

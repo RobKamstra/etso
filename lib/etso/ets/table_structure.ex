@@ -7,14 +7,40 @@ defmodule Etso.ETS.TableStructure do
 
   def field_names(schema) do
     fields = schema.__schema__(:fields)
-    primary_key = schema.__schema__(:primary_key)
-    primary_key ++ (fields -- primary_key)
+
+    case schema.__schema__(:primary_key) do
+      [_] = primary_key ->
+        primary_key ++ (fields -- primary_key)
+
+      primary_key ->
+        [primary_key] ++ (fields -- primary_key)
+    end
   end
 
   def fields_to_tuple(field_names, fields) do
     field_names
-    |> Enum.map(&Keyword.get(fields, &1, nil))
+    |> Enum.map(fn
+      field_name when is_atom(field_name) ->
+        Keyword.get(fields, field_name, nil)
+
+      composite_fieldname when is_list(composite_fieldname) ->
+        fields
+        |> take_ordered(composite_fieldname)
+        |> Keyword.values()
+        |> List.to_tuple()
+    end)
     |> List.to_tuple()
+  end
+
+  defp take_ordered(fields, field_names, results \\ [])
+
+  defp take_ordered(fields, [field_name | field_names], result) do
+    {:ok, value} = Keyword.fetch(fields, field_name)
+    take_ordered(fields, field_names, [{field_name, value} | result])
+  end
+
+  defp take_ordered(_, [], result) do
+    Enum.reverse(result)
   end
 
   def entries_to_tuples(field_names, entries) do
