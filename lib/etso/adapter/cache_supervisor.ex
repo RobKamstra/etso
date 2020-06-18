@@ -21,6 +21,10 @@ defmodule Etso.Adapter.CacheSupervisor do
     DynamicSupervisor.start_child(build_name(repo), child_spec)
   end
 
+  def stop_child(repo, pid) do
+    DynamicSupervisor.terminate_child(build_name(repo), pid)
+  end
+
   defp build_name(repo) do
     Module.concat([repo, Enum.at(Module.split(__MODULE__), -1)])
   end
