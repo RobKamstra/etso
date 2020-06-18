@@ -22,7 +22,13 @@ defmodule Etso.Adapter.Behaviour.Queryable do
   def execute(adapter_meta, query_meta, qc, params, options) do
     {id, query_cache} = update_query_cache(adapter_meta, query_meta, qc, options)
 
-    case query_cache.strategy do
+    strategy =
+      :persistent_term.get(
+        {adapter_meta.repo, query_cache.schema, :override_strategy},
+        query_cache.strategy
+      )
+
+    case strategy do
       :original_only ->
         query_original(adapter_meta.cache_for, query_meta, query_cache, params, options)
 
@@ -130,8 +136,6 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     entry_repo = adapter_meta.entry_repo
 
     if insert_into_cache? do
-      # Task.start(fn ->
-      # end)
       field_names = TableStructure.field_names(schema)
       entries = Enum.map(results, &Enum.zip(field_names, &1))
       do_cache_insert_all(adapter_meta.repo, schema, entries)
@@ -184,7 +188,7 @@ defmodule Etso.Adapter.Behaviour.Queryable do
   end
 
   defp update_query_cache(
-         %{repo: _cache_repo, cache_for: original_repo},
+         %{repo: _, cache_for: original_repo},
          query_meta,
          {:cache, update, {id, query_cache}},
          options

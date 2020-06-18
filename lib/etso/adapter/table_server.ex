@@ -13,8 +13,8 @@ defmodule Etso.Adapter.TableServer do
   @doc """
   Starts the Table Server for the given `repo` and `schema`, with registration under `name`.
   """
-  def start_link({repo, schema, name}) do
-    GenServer.start_link(__MODULE__, {repo, schema}, name: name)
+  def start_link({repo, schema}) do
+    GenServer.start_link(__MODULE__, {repo, schema})
   end
 
   @impl GenServer
@@ -23,8 +23,14 @@ defmodule Etso.Adapter.TableServer do
     table_reference = :ets.new(table_name, [:set, :public])
 
     case TableRegistry.register_table(repo, schema, table_reference) do
-      :ok -> {:ok, table_reference}
+      :ok -> {:ok, {table_reference, repo, schema}}
       {:error, reason} -> {:stop, reason}
     end
+  end
+
+  @impl GenServer
+  def terminate(_reason, {_, repo, schema} = state) do
+    Etso.Adapter.TableRegistry.unregister_table(repo, schema)
+    state
   end
 end

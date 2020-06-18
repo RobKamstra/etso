@@ -5,12 +5,12 @@ defmodule Etso.Adapter.TableSupervisor do
   @doc """
   Starts the Supervisor for the given `repo`.
   """
-  def start_link(config) do
-    Supervisor.start_link(__MODULE__, config)
+  def start_link({repo, schema, name}) do
+    Supervisor.start_link(__MODULE__, {repo, schema}, name: name)
   end
 
   @impl Supervisor
-  def init({repo, schema, _} = config) do
+  def init({repo, schema} = config) do
     application_config = Application.get_env(:summa_core, repo)
 
     children =
