@@ -136,7 +136,7 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     entry_repo = adapter_meta.entry_repo
 
     if insert_into_cache? do
-      field_names = TableStructure.field_names(schema)
+      field_names = schema.__schema__(:fields)
       entries = Enum.map(results, &Enum.zip(field_names, &1))
       do_cache_insert_all(adapter_meta.repo, schema, entries)
 
