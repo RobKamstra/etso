@@ -27,7 +27,8 @@ defmodule Etso.Cache.CleaningStrategy.LeastRecentlyWritten do
   end
 
   @impl Etso.Cache.CleaningStrategy
-  def cleanup(strategy_state, repo, _schema, cache_entry_repo) do
+  def cleanup(strategy_state, repo, schema, cache_entry_repo) do
+    start_report = create_cleanup_report(strategy_state, repo, schema, cache_entry_repo)
     {:ok, cached_query_table} = TableRegistry.get_table(cache_entry_repo, CachedQuery)
     free_percentage = strategy_state.free_percentage
 
@@ -37,7 +38,40 @@ defmodule Etso.Cache.CleaningStrategy.LeastRecentlyWritten do
         &cleanup_query(cached_query_table, repo, free_percentage, &1)
       )
 
-    Map.put(strategy_state, :queries, new_queries)
+    strategy_state = Map.put(strategy_state, :queries, new_queries)
+    end_report = create_cleanup_report(strategy_state, repo, schema, cache_entry_repo)
+
+    :telemetry.execute(
+      [:etso, :janitor, :execution],
+      %{
+        cleanup_time: end_report.time - start_report.time,
+        cleaned_entries:
+          start_report.number_of_cached_entries - end_report.number_of_cached_entries,
+        cleaned_queries:
+          start_report.number_of_cached_queries - end_report.number_of_cached_queries
+      },
+      %{
+        schema: schema
+      }
+    )
+
+    strategy_state
+  end
+
+  defp create_cleanup_report(strategy_state, repo, schema, cache_entry_repo) do
+    {:ok, ref} = TableRegistry.get_table(repo, schema)
+    ets_size = :ets.info(ref, :size)
+
+    number_of_cached_queries =
+      Enum.reduce(strategy_state.queries, 0, fn {_, %{cache_entry_count: count}}, acc ->
+        acc + count
+      end)
+
+    %{
+      time: :os.system_time(:microsecond),
+      number_of_cached_entries: ets_size,
+      number_of_cached_queries: number_of_cached_queries
+    }
   end
 
   defp cleanup_query(
@@ -97,6 +131,7 @@ defmodule Etso.Cache.CleaningStrategy.LeastRecentlyWritten do
   @impl Etso.Cache.CleaningStrategy
   def cache_entry_added(strategy_state, measurements, metadata) do
     query_id = metadata.query_id
+
     update_in(strategy_state, [:queries, query_id], &add_query_stats(measurements, &1))
   end
 
@@ -222,7 +257,8 @@ defmodule Etso.Cache.CleaningStrategy.LeastRecentlyWritten do
          %{
            query: query_cache.query,
            strategy: :cache_only,
-           type: :delete_all
+           type: :delete_all,
+           schema: query_cache.schema
          }},
         params,
         []
