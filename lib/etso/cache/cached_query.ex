@@ -8,8 +8,8 @@ defmodule Etso.Cache.CachedQuery do
 
   schema "schemas" do
     field(:query_id, :integer, primary_key: true)
-    field(:params, Summa.Core.Type.Term, primary_key: true)
-    field(:expected_count, Summa.Core.Type.Term)
+    field(:params, Etso.Type.Term, primary_key: true)
+    field(:expected_count, Etso.Type.Term)
     field(:updated_at, :integer)
     field(:times_accessed, :integer)
     field(:average_time_between_access, :integer)
