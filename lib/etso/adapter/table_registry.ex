@@ -22,10 +22,11 @@ defmodule Etso.Adapter.TableRegistry do
   def disable_table(repo, schema) do
     registry = build_name(repo)
 
+    :persistent_term.put({repo, schema, :override_strategy}, :original_only)
+
     case Registry.lookup(registry, {schema, :supervisor}) do
       [{pid, _table_supervisor_reference}] ->
         CacheSupervisor.stop_child(repo, pid)
-        :persistent_term.put({repo, schema, :override_strategy}, :original_only)
 
       [] ->
         {:error, :not_found}
