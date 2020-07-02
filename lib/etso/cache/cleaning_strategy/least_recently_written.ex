@@ -250,16 +250,19 @@ defmodule Etso.Cache.CleaningStrategy.LeastRecentlyWritten do
       :ets.delete(table, {query_id, params})
       query_cache = get_query_cache(adapter_meta, query_id)
 
+      id = System.unique_integer([:positive])
+
       adapter.execute(
         adapter_meta,
         query_cache.query_meta,
         {:nocache,
-         %{
-           query: query_cache.query,
-           strategy: :cache_only,
-           type: :delete_all,
-           schema: query_cache.schema
-         }},
+         {id,
+          %{
+            query: query_cache.query,
+            strategy: :cache_only,
+            type: :delete_all,
+            schema: query_cache.schema
+          }}},
         params,
         []
       )

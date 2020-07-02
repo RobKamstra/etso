@@ -221,9 +221,20 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     query_cache
   end
 
-  # ffs the number of work arounds is getting ridiculous again.
-  defp update_query_cache(_, _, {:nocache, exec}, _) do
-    {0, exec}
+  defp update_query_cache(_, _, {:nocache, {query_id, %{strategy: :cache_only}}} = query_cache, _) do
+    query_cache
+  end
+
+  defp update_query_cache(%{cache_for: original_repo}, _, {:nocache, {query_id, exec}}, _) do
+    {adapter, _} = Ecto.Repo.Registry.lookup(original_repo)
+    original_prepare = prepare_original_query(adapter, exec.type, exec.query)
+
+    exec =
+      exec
+      |> Map.put(:original_prepare, original_prepare)
+      |> Map.put(:strategy, :original_only)
+
+    {query_id, exec}
   end
 
   defp prepare_original_query(adapter, type, query) do
