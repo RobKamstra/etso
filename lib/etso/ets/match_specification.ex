@@ -224,6 +224,14 @@ defmodule Etso.ETS.MatchSpecification do
     end
   end
 
+  defp resolve_field_values(params, value) when is_list(value) do
+    Enum.flat_map(value, &resolve_field_values(params, &1))
+  end
+
+  defp resolve_field_values(_params, value) do
+    List.wrap(value)
+  end
+
   defp get_field_index(field_names, field_name) do
     Enum.reduce_while(field_names, 1, fn
       x, index when is_atom(x) ->
