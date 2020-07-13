@@ -125,13 +125,14 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     entry_repo.update(changeset, [])
   end
 
+  defp write_resultset_in_cache(_, _, _, _, %{select: %{from: :none}}), do: nil
+
   defp write_resultset_in_cache(query_id, params, resultset, adapter_meta, query_meta) do
     {count, results} = resultset
     {:any, {:source, {_table, schema}, _prefix, _types}} = query_meta.select.from
 
     has_results? = count > 0
-    complete_resultset? = query_meta.select.postprocess == {:source, :from}
-    insert_into_cache? = has_results? and complete_resultset?
+    insert_into_cache? = has_results?
 
     entry_repo = adapter_meta.entry_repo
 
@@ -161,6 +162,8 @@ defmodule Etso.Adapter.Behaviour.Queryable do
           average_time_between_access: 0
         })
       )
+    else
+      IO.inspect(query_meta, label: "could not write resultset into cache")
     end
   end
 
@@ -221,7 +224,7 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     query_cache
   end
 
-  defp update_query_cache(_, _, {:nocache, {query_id, %{strategy: :cache_only}}} = query_cache, _) do
+  defp update_query_cache(_, _, {:nocache, {_, %{strategy: :cache_only}}} = query_cache, _) do
     query_cache
   end
 
