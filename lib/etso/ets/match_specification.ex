@@ -3,6 +3,35 @@ defmodule Etso.ETS.MatchSpecification do
   The ETS Match Specifications module contains various functions which convert Ecto queries to
   ETS Match Specifications in order to execute the given queries.
   """
+  def is_supported?(%Ecto.Query{} = query) do
+    is_supported?(query.wheres)
+  end
+
+  def is_supported?([]), do: true
+
+  def is_supported?([%Ecto.Query.BooleanExpr{expr: expression} | rest]) do
+    is_supported?(expression) and is_supported?(rest)
+  end
+
+  def is_supported?({:not, [], [clause]}) do
+    is_supported?(clause)
+  end
+
+  for operator <- ~w(and or)a do
+    def is_supported?({unquote(operator), [], [lhs, rhs]}) do
+      is_supported?(lhs) and is_supported?(rhs)
+    end
+  end
+
+  for operator <- ~w(== != < > <= >= in)a do
+    def is_supported?({unquote(operator), _, _}) do
+      true
+    end
+  end
+
+  def is_supported?(_) do
+    false
+  end
 
   def build_select(query, params) do
     {_, schema} = query.from.source

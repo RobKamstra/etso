@@ -16,7 +16,11 @@ defmodule Etso.Adapter.Behaviour.Queryable do
       schema: schema
     }
 
-    {:cache, {id, query_cache}}
+    if MatchSpecification.is_supported?(query) do
+      {:cache, {id, query_cache}}
+    else
+      {:nocache, {id, query_cache}}
+    end
   end
 
   def execute(adapter_meta, query_meta, qc, params, options) do
@@ -162,8 +166,6 @@ defmodule Etso.Adapter.Behaviour.Queryable do
           average_time_between_access: 0
         })
       )
-    else
-      IO.inspect(query_meta, label: "could not write resultset into cache")
     end
   end
 
