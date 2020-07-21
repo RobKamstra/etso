@@ -399,15 +399,14 @@ defmodule Etso.Adapter.Behaviour.Queryable do
   end
 
   # first where clause does not matter if it is :or or :and
-  defp build_filter([%{expr: expr} | rest] = wheres, filters = []) when is_list(wheres) do
+  defp build_filter([%{expr: expr} | rest], filters = []) do
     case build_filter(expr, filters) do
       {:ok, filters} -> build_filter(rest, filters)
       error -> error
     end
   end
 
-  defp build_filter([%{expr: expr, op: :and} | rest] = wheres, filters)
-       when is_list(wheres) do
+  defp build_filter([%{expr: expr, op: :and} | rest], filters) do
     case build_filter(expr, filters) do
       {:ok, filters} -> build_filter(rest, filters)
       error -> error
