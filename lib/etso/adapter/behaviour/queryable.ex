@@ -10,10 +10,32 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     id = System.unique_integer([:positive])
     schema = get_schema_from_query(query)
 
+    primary_key = schema.__schema__(:primary_key)
+
+    {do_lookup, primary_key_filter} =
+      case build_filter(query.wheres, []) do
+        {:ok, filters} ->
+          filter_keys =
+            filters
+            |> Keyword.keys()
+            |> MapSet.new()
+
+          if MapSet.subset?(MapSet.new(primary_key), filter_keys) do
+            {true, Keyword.take(filters, primary_key)}
+          else
+            {false, []}
+          end
+
+        _ ->
+          {false, []}
+      end
+
     query_cache = %{
       type: type,
       query: query,
-      schema: schema
+      schema: schema,
+      do_lookup: do_lookup,
+      primary_key_filter: primary_key_filter
     }
 
     if MatchSpecification.is_supported?(query) do
@@ -256,10 +278,43 @@ defmodule Etso.Adapter.Behaviour.Queryable do
 
   defp query_on_cache(repo, query_cache, params) do
     case query_cache.type do
-      :all -> execute_on_cache(repo, query_cache.query, params)
-      :update_all -> update_in_cache(repo, query_cache.query, params)
-      :delete_all -> delete_from_cache(repo, query_cache.query, params)
+      :all ->
+        if Map.get(query_cache, :do_lookup, false) do
+          {_, schema} = query_cache.query.from.source
+          primary_key = populate_filters(query_cache.primary_key_filter, params)
+          lookup_in_cache(repo, schema, primary_key)
+        else
+          execute_on_cache(repo, query_cache.query, params)
+        end
+
+      :update_all ->
+        update_in_cache(repo, query_cache.query, params)
+
+      :delete_all ->
+        delete_from_cache(repo, query_cache.query, params)
     end
+  end
+
+  defp lookup_in_cache(repo, schema, primary_key) do
+    {:ok, ets_table} = TableRegistry.get_table(repo, schema)
+
+    ets_objects =
+      case primary_key do
+        [{_key, value}] ->
+          :ets.lookup(ets_table, value)
+
+        primary_key ->
+          primary_key_tuple =
+            primary_key
+            |> Keyword.values()
+            |> List.to_tuple()
+
+          :ets.lookup(ets_table, primary_key_tuple)
+      end
+
+    ets_objects = Enum.map(ets_objects, &Tuple.to_list/1)
+
+    {length(ets_objects), ets_objects}
   end
 
   defp execute_on_cache(repo, query, params) do
@@ -268,6 +323,10 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     ets_match = MatchSpecification.build_select(query, params)
     ets_objects = :ets.select(ets_table, [ets_match])
     {length(ets_objects), ets_objects}
+  end
+
+  defp query_on_index?(query) do
+    false
   end
 
   defp delete_from_cache(repo, query, params) do
@@ -328,5 +387,67 @@ defmodule Etso.Adapter.Behaviour.Queryable do
 
   defp get_schema_from_query(query) do
     elem(query.from.source, 1)
+  end
+
+  defp build_filter([], filters) do
+    {:ok, filters}
+  end
+
+  # first where clause does not matter if it is :or or :and
+  defp build_filter([%{expr: expr} | rest] = wheres, filters = []) when is_list(wheres) do
+    case build_filter(expr, filters) do
+      {:ok, filters} -> build_filter(rest, filters)
+      error -> error
+    end
+  end
+
+  defp build_filter([%{expr: expr, op: :and} | rest] = wheres, filters)
+       when is_list(wheres) do
+    case build_filter(expr, filters) do
+      {:ok, filters} -> build_filter(rest, filters)
+      error -> error
+    end
+  end
+
+  defp build_filter({:and, [], [lhs, rhs]}, filters) do
+    case build_filter(lhs, filters) do
+      {:ok, filters} -> build_filter(rhs, filters)
+      error -> error
+    end
+  end
+
+  defp build_filter({:==, [], [lhs, rhs]}, filters) do
+    case build_filter(lhs) do
+      atom when is_atom(atom) ->
+        value = build_filter(rhs)
+        filters = [{atom, value} | filters]
+        {:ok, filters}
+
+      _ ->
+        {:error, :equals_expression_without_atom}
+    end
+  end
+
+  defp build_filter(_, _) do
+    {:error, :unsupported_subset}
+  end
+
+  defp build_filter({{:., [], [{:&, [], [0]}, field_name]}, [], []}) do
+    field_name
+  end
+
+  defp build_filter({:^, [], [index]}) do
+    {:param, index}
+  end
+
+  defp build_filter(value) when not is_tuple(value) do
+    {:value, value}
+  end
+
+  defp populate_filters(filters, params) do
+    Enum.map(filters, fn
+      {attribute, {:value, value}} -> {attribute, value}
+      {attribute, {:param, index}} -> {attribute, Enum.at(params, index)}
+    end)
   end
 end
