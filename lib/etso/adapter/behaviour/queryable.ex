@@ -21,7 +21,7 @@ defmodule Etso.Adapter.Behaviour.Queryable do
             |> MapSet.new()
 
           if MapSet.subset?(MapSet.new(primary_key), filter_keys) do
-            {true, Keyword.take(filters, primary_key)}
+            {true, take_ordered(filters, primary_key)}
           else
             {false, []}
           end
@@ -301,7 +301,9 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     ets_objects =
       case primary_key do
         [{_key, value}] ->
-          :ets.lookup(ets_table, value)
+          ets_table
+          |> :ets.lookup(value)
+          |> Enum.map(&Tuple.to_list/1)
 
         primary_key ->
           primary_key_tuple =
@@ -309,10 +311,17 @@ defmodule Etso.Adapter.Behaviour.Queryable do
             |> Keyword.values()
             |> List.to_tuple()
 
-          :ets.lookup(ets_table, primary_key_tuple)
-      end
+          ets_table
+          |> :ets.lookup(primary_key_tuple)
+          |> Enum.map(&Tuple.to_list/1)
+          |> case do
+            [] ->
+              []
 
-    ets_objects = Enum.map(ets_objects, &Tuple.to_list/1)
+            [[primary_key_result_tuple | rest]] ->
+              [Tuple.to_list(primary_key_result_tuple) ++ rest]
+          end
+      end
 
     {length(ets_objects), ets_objects}
   end
@@ -445,5 +454,18 @@ defmodule Etso.Adapter.Behaviour.Queryable do
       {attribute, {:value, value}} -> {attribute, value}
       {attribute, {:param, index}} -> {attribute, Enum.at(params, index)}
     end)
+  end
+
+  defp take_ordered(fields, field_names, results \\ [])
+
+  defp take_ordered(fields, [field_name | field_names], result) do
+    case Keyword.fetch(fields, field_name) do
+      {:ok, value} -> take_ordered(fields, field_names, [{field_name, value} | result])
+      :error -> result
+    end
+  end
+
+  defp take_ordered(_, [], result) do
+    Enum.reverse(result)
   end
 end
