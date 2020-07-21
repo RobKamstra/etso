@@ -325,10 +325,6 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     {length(ets_objects), ets_objects}
   end
 
-  defp query_on_index?(query) do
-    false
-  end
-
   defp delete_from_cache(repo, query, params) do
     {_, schema} = query.from.source
     {:ok, ets_table} = TableRegistry.get_table(repo, schema)
