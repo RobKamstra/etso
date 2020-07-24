@@ -282,7 +282,7 @@ defmodule Etso.Adapter.Behaviour.Queryable do
         if Map.get(query_cache, :do_lookup, false) do
           {_, schema} = query_cache.query.from.source
           primary_key = populate_filters(query_cache.primary_key_filter, params)
-          lookup_in_cache(repo, schema, primary_key)
+          lookup_in_cache(repo, schema, primary_key, query_cache.query.select.fields)
         else
           execute_on_cache(repo, query_cache.query, params)
         end
@@ -295,15 +295,17 @@ defmodule Etso.Adapter.Behaviour.Queryable do
     end
   end
 
-  defp lookup_in_cache(repo, schema, primary_key) do
+  defp lookup_in_cache(repo, schema, primary_key, select_fields) do
     {:ok, ets_table} = TableRegistry.get_table(repo, schema)
+
+    schema_fields = schema.__schema__(:fields)
 
     ets_objects =
       case primary_key do
         [{_key, value}] ->
           ets_table
           |> :ets.lookup(value)
-          |> Enum.map(&Tuple.to_list/1)
+          |> Enum.map(&conform_to_ecto(schema_fields, select_fields, &1))
 
         primary_key ->
           primary_key_tuple =
@@ -313,17 +315,32 @@ defmodule Etso.Adapter.Behaviour.Queryable do
 
           ets_table
           |> :ets.lookup(primary_key_tuple)
-          |> Enum.map(&Tuple.to_list/1)
-          |> case do
-            [] ->
-              []
-
-            [[primary_key_result_tuple | rest]] ->
-              [Tuple.to_list(primary_key_result_tuple) ++ rest]
-          end
+          |> Enum.map(&conform_to_ecto(schema_fields, select_fields, &1))
       end
 
     {length(ets_objects), ets_objects}
+  end
+
+  defp conform_to_ecto(schema_fields, select_fields, lookup_result) do
+    values =
+      case Tuple.to_list(lookup_result) do
+        [tuple | rest] when is_tuple(tuple) -> Tuple.to_list(tuple) ++ rest
+        result -> result
+      end
+
+    lookup = lookup_result(schema_fields, values, %{})
+
+    Enum.map(select_fields, fn {{:., _, [{:&, [], [0]}, select_field]}, [], []} ->
+      Map.get(lookup, select_field)
+    end)
+  end
+
+  defp lookup_result([], [], result) do
+    result
+  end
+
+  defp lookup_result([field_name | field_names], [field_value | values], result) do
+    lookup_result(field_names, values, Map.put(result, field_name, field_value))
   end
 
   defp execute_on_cache(repo, query, params) do
